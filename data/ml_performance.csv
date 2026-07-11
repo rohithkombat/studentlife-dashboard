@@ -1,0 +1,14 @@
+task,model,metric,value
+regression,Linear Regression,MAE,1.0046
+regression,Ridge Regression,MAE,1.0046
+regression,Random Forest,MAE,1.0069
+regression,Gradient Boosting,MAE,1.0115
+regression,Baseline (mean),MAE,1.0198
+classification,Logistic Regression,AUC,0.6188
+classification,Logistic Regression,F1,0.3463
+classification,Random Forest,AUC,0.5916
+classification,Random Forest,F1,0.0444
+classification,Gradient Boosting,AUC,0.6278
+classification,Gradient Boosting,F1,0.1667
+classification,Baseline,AUC,0.5
+classification,Baseline,F1,0.0
