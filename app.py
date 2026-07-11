@@ -2,6 +2,9 @@
 # StudentLife Visual Analytics Dashboard
 # Dissertation: Visual Analytics for Digital Health
 # Author: Rohith Elanchezhian | Newcastle University
+#
+# Data files are loaded automatically from the data/ folder.
+# No manual uploading required.
 # ─────────────────────────────────────────────────────────────────────────────
 
 import streamlit as st
@@ -10,6 +13,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import os
 
 st.set_page_config(
     page_title="StudentLife Dashboard",
@@ -24,16 +28,6 @@ st.markdown("""
 [data-testid="stSidebar"]          { background-color: #17171a; }
 [data-testid="stHeader"]           { background-color: #0f0f11; }
 .block-container { padding-top: 1.5rem; }
-.finding-box {
-    background: #17171a;
-    border-left: 4px solid #7C6AF7;
-    border-radius: 8px;
-    padding: 0.9rem 1.1rem;
-    margin-bottom: 0.6rem;
-}
-.finding-box.stress { border-left-color: #E05C5C; }
-.finding-box.sleep  { border-left-color: #4ECDC4; }
-.finding-box.surprise { border-left-color: #F0A050; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,21 +67,20 @@ def apply_layout(fig, height=300, **extra):
     fig.update_yaxes(gridcolor='#2a2a2f')
     return fig
 
-def metric_card(label, value, help_text=""):
-    st.metric(label, value, help=help_text)
-
 def quality_check(df, uid_col='uid', stress_col='stress_avg', threshold=5):
-    """Return dict of uid -> (count, is_sparse)."""
     counts = df.groupby(uid_col)[stress_col].count()
     return {uid: (int(n), n < threshold) for uid, n in counts.items()}
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATA LOADING
+# DATA LOADING — reads directly from the data/ folder, no upload needed
 # ─────────────────────────────────────────────────────────────────────────────
 
+DATA_DIR = 'data'   # folder inside the GitHub repository
+
 @st.cache_data
-def load_master(file):
-    df = pd.read_csv(file)
+def load_master():
+    path = os.path.join(DATA_DIR, 'daily_master.csv')
+    df = pd.read_csv(path)
     if 'student_id' in df.columns:
         df.rename(columns={'student_id': 'uid'}, inplace=True)
     if 'date' in df.columns:
@@ -100,83 +93,87 @@ def load_master(file):
     return df
 
 @st.cache_data
-def load_csv(file):
-    df = pd.read_csv(file)
+def load_ml_file(filename):
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    df = pd.read_csv(path)
     if 'student_id' in df.columns:
         df.rename(columns={'student_id': 'uid'}, inplace=True)
     return df
 
+# Check if data folder and master file exist
+master_path = os.path.join(DATA_DIR, 'daily_master.csv')
+
+if not os.path.exists(master_path):
+    st.title("🎓 StudentLife Dashboard")
+    st.error(
+        "**Data files not found.**  \n"
+        "Make sure the `data/` folder exists in your GitHub repository "
+        "and contains `daily_master.csv`."
+    )
+    st.markdown("""
+    **How to fix this:**
+    1. Go to your GitHub repository
+    2. Create a folder called `data`
+    3. Upload these files into it:
+       - `daily_master.csv` ← required
+       - `ml_predictions.csv`
+       - `ml_clusters.csv`
+       - `ml_feature_importance.csv`
+       - `ml_performance.csv`
+    4. Streamlit will reload automatically
+    """)
+    st.stop()
+
+# Load all files automatically
+df         = load_master()
+pred_df    = load_ml_file('ml_predictions.csv')
+cluster_df = load_ml_file('ml_clusters.csv')
+fi_df      = load_ml_file('ml_feature_importance.csv')
+perf_df    = load_ml_file('ml_performance.csv')
+
 # ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR
+# SIDEBAR — filters only, no uploading
 # ─────────────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
     st.markdown("## 🎓 StudentLife")
     st.markdown("*Visual Analytics for Digital Health*")
-    st.markdown("**Rohith Elanchezhian | Newcastle University**")
+    st.markdown("**Rohith Elanchezhian**")
+    st.markdown("**Newcastle University**")
     st.divider()
 
-    st.markdown("### 📁 Upload Data Files")
-
-    master_file = st.file_uploader(
-        "daily_master.csv *(required)*",
-        type="csv", key="master",
-        help="Google Drive → clean_data → daily_master.csv"
+    st.markdown("### Filters")
+    week_filter = st.selectbox(
+        "Study week",
+        ["All weeks"] + [f"Week {w}" for w in WEEKS]
     )
+    day_filter = st.selectbox(
+        "Day type",
+        ["All days", "Weekdays only", "Weekends only"]
+    )
+    st.divider()
 
-    st.markdown("**ML files** *(optional — for ML tab)*")
-    pred_file   = st.file_uploader("ml_predictions.csv",     type="csv", key="pred")
-    cluster_file= st.file_uploader("ml_clusters.csv",        type="csv", key="cluster")
-    fi_file     = st.file_uploader("ml_feature_importance.csv", type="csv", key="fi")
-    perf_file   = st.file_uploader("ml_performance.csv",     type="csv", key="perf")
+    # Show what files are loaded
+    st.markdown("### Data Status")
+    st.success("✅ daily_master.csv")
+    if pred_df    is not None: st.success("✅ ml_predictions.csv")
+    else:                      st.warning("⚠️ ml_predictions.csv missing")
+    if cluster_df is not None: st.success("✅ ml_clusters.csv")
+    else:                      st.warning("⚠️ ml_clusters.csv missing")
+    if fi_df      is not None: st.success("✅ ml_feature_importance.csv")
+    else:                      st.warning("⚠️ ml_feature_importance.csv missing")
+    if perf_df    is not None: st.success("✅ ml_performance.csv")
+    else:                      st.warning("⚠️ ml_performance.csv missing")
 
-    if master_file:
-        st.divider()
-        st.markdown("### Filters")
-        week_filter = st.selectbox(
-            "Study week",
-            ["All weeks"] + [f"Week {w}" for w in WEEKS]
-        )
-        day_filter = st.selectbox(
-            "Day type",
-            ["All days", "Weekdays only", "Weekends only"]
-        )
-        st.divider()
-        st.caption("📊 49 students · 10 weeks · Spring 2013")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# UPLOAD SCREEN
-# ─────────────────────────────────────────────────────────────────────────────
-
-st.title("🎓 StudentLife Visual Analytics Dashboard")
-
-if not master_file:
-    st.info("👈 Upload **daily_master.csv** in the sidebar to get started.")
-    st.markdown("""
-    | Tab | What it shows |
-    |-----|--------------|
-    | 📊 Overview | Summary stats and key findings |
-    | 📈 Weekly Trends | All variables across 10 weeks |
-    | 🔗 Correlations | Which variables are related |
-    | 🌡️ Stress Heatmap | Every student × every week |
-    | 👤 Student Explorer | Individual student profiles |
-    | 🤖 ML Predictions | Predicted stress + model results |
-    """)
-    st.stop()
+    st.divider()
+    st.caption("📊 49 students · 10 weeks · Spring 2013  \nDartmouth College, USA")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LOAD & FILTER
+# APPLY FILTERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-df = load_master(master_file)
-
-# Load optional ML files
-pred_df    = load_csv(pred_file)    if pred_file    else None
-cluster_df = load_csv(cluster_file) if cluster_file else None
-fi_df      = load_csv(fi_file)      if fi_file      else None
-perf_df    = load_csv(perf_file)    if perf_file    else None
-
-# Apply sidebar filters
 filtered = df.copy()
 if week_filter != "All weeks":
     wk = int(week_filter.split(" ")[1])
@@ -186,10 +183,14 @@ if day_filter == "Weekdays only":
 elif day_filter == "Weekends only":
     filtered = filtered[filtered['is_weekend'] == True]
 
-# Quality check — sparse students
 quality = quality_check(df)
-sparse_students = [uid for uid, (n, is_sp) in quality.items() if is_sp]
+sparse_students = [uid for uid, (n, sp) in quality.items() if sp]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN TITLE
+# ─────────────────────────────────────────────────────────────────────────────
+
+st.title("🎓 StudentLife Visual Analytics Dashboard")
 st.caption(
     f"Showing **{len(filtered):,} rows** · "
     f"**{filtered['uid'].nunique()} students** · "
@@ -197,16 +198,15 @@ st.caption(
 )
 if sparse_students:
     st.warning(
-        f"⚠️ **{len(sparse_students)} students have fewer than 5 stress responses** "
-        f"({', '.join(sparse_students[:5])}{'...' if len(sparse_students)>5 else ''}). "
-        f"Their averages are less reliable."
+        f"⚠️ {len(sparse_students)} students have fewer than 5 stress responses "
+        f"— their averages are less reliable."
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
     "📊 Overview",
     "📈 Weekly Trends",
     "🔗 Correlations",
@@ -220,69 +220,50 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ═══════════════════════════════════════════════════════════════
 with tab1:
 
-    # ── Key findings panel ─────────────────────────────────────
-    st.markdown("### 📌 Key Findings")
-
     stress_mean = safe_mean(filtered, 'stress_avg')
     sleep_mean  = safe_mean(filtered, 'sleep_hours')
     mood_mean   = safe_mean(filtered, 'mood_score_avg')
     talk_mean   = safe_mean(filtered, 'total_talking_minutes')
-    high_pct    = (filtered['high_stress'].mean() * 100
+    high_pct    = (filtered['high_stress'].mean()*100
                    if 'high_stress' in filtered.columns else None)
     dep_valid   = (filtered['sleep_hours'].dropna()
                    if 'sleep_hours' in filtered.columns else pd.Series([]))
-    dep_pct     = ((dep_valid < 7).mean() * 100) if len(dep_valid) else None
+    dep_pct     = ((dep_valid < 7).mean()*100) if len(dep_valid) else None
 
-    # Auto-generate findings from the actual data
+    # Key findings panel
+    st.markdown("### 📌 Key Findings")
     findings = []
-
     if stress_mean is not None and high_pct is not None:
-        findings.append((
-            "stress",
-            "😟 Stress",
-            f"Average stress is **{stress_mean:.2f}/5** and **{high_pct:.0f}%** "
-            f"of days were high stress (level 4 or 5)."
-        ))
-
+        findings.append(("😟 Stress",
+            f"Average stress is **{stress_mean:.2f}/5** and "
+            f"**{high_pct:.0f}%** of days were high stress (level 4–5)."))
     if dep_pct is not None and sleep_mean is not None:
-        findings.append((
-            "sleep",
-            "😴 Sleep",
-            f"Average sleep is **{sleep_mean:.1f}h** but **{dep_pct:.0f}%** "
-            f"of nights fell below the recommended 7 hours."
-        ))
-
-    # Check if weekend stress is higher (surprise finding)
+        findings.append(("😴 Sleep",
+            f"Average sleep is **{sleep_mean:.1f}h** but "
+            f"**{dep_pct:.0f}%** of nights fell below the recommended 7 hours."))
     if 'stress_avg' in df.columns and 'is_weekend' in df.columns:
         wd = df[df['is_weekend']==False]['stress_avg'].mean()
         we = df[df['is_weekend']==True]['stress_avg'].mean()
         if not np.isnan(wd) and not np.isnan(we):
             direction = "higher" if we > wd else "lower"
-            findings.append((
-                "surprise",
-                "😮 Surprising Finding",
-                f"Weekend stress (**{we:.2f}**) is **{direction}** than weekday stress "
-                f"(**{wd:.2f}**) — unstructured time appears to increase anxiety."
-            ))
+            findings.append(("😮 Surprise",
+                f"Weekend stress (**{we:.2f}**) is **{direction}** than weekday "
+                f"stress (**{wd:.2f}**) — unstructured time increases anxiety."))
 
-    f1, f2, f3 = st.columns(3)
-    for col, (box_class, title, text) in zip([f1,f2,f3], findings[:3]):
-        col.markdown(
-            f'<div class="finding-box {box_class}">'
-            f'<strong>{title}</strong><br><small>{text}</small></div>',
-            unsafe_allow_html=True
-        )
+    cols_f = st.columns(len(findings)) if findings else []
+    for col, (title, text) in zip(cols_f, findings):
+        col.info(f"**{title}**  \n{text}")
 
     st.divider()
 
-    # ── Metric cards ───────────────────────────────────────────
+    # Metric cards
     c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("Avg Stress",       f"{stress_mean:.2f}/5"  if stress_mean is not None else "—")
-    c2.metric("High Stress Days", f"{high_pct:.0f}%"      if high_pct    is not None else "—")
-    c3.metric("Avg Sleep",        f"{sleep_mean:.1f}h"    if sleep_mean  is not None else "—")
-    c4.metric("Nights Under 7h",  f"{dep_pct:.0f}%"       if dep_pct     is not None else "—")
-    c5.metric("Avg Mood",         f"{mood_mean:.2f}"      if mood_mean   is not None else "—")
-    c6.metric("Avg Talking",      f"{talk_mean:.0f} min"  if talk_mean   is not None else "—")
+    c1.metric("Avg Stress",       f"{stress_mean:.2f}/5" if stress_mean is not None else "—")
+    c2.metric("High Stress Days", f"{high_pct:.0f}%"     if high_pct    is not None else "—")
+    c3.metric("Avg Sleep",        f"{sleep_mean:.1f}h"   if sleep_mean  is not None else "—")
+    c4.metric("Nights Under 7h",  f"{dep_pct:.0f}%"      if dep_pct     is not None else "—")
+    c5.metric("Avg Mood",         f"{mood_mean:.2f}"     if mood_mean   is not None else "—")
+    c6.metric("Avg Talking",      f"{talk_mean:.0f}min"  if talk_mean   is not None else "—")
 
     st.divider()
     col1, col2 = st.columns(2)
@@ -301,7 +282,7 @@ with tab1:
                 textposition='outside'
             ))
             apply_layout(fig, height=280, showlegend=False,
-                         yaxis=dict(title='Responses',gridcolor='#2a2a2f'))
+                         yaxis=dict(title='Responses', gridcolor='#2a2a2f'))
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -320,7 +301,6 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
 
     col3, col4 = st.columns(2)
-
     with col3:
         st.markdown("##### Physical Activity Breakdown")
         act_map = {'Stationary':'fraction_stationary',
@@ -335,7 +315,8 @@ with tab1:
                 textposition='outside'
             ))
             apply_layout(fig, height=260, showlegend=False,
-                         yaxis=dict(title='% of readings',range=[0,105],gridcolor='#2a2a2f'))
+                         yaxis=dict(title='% of readings', range=[0,105],
+                                    gridcolor='#2a2a2f'))
             st.plotly_chart(fig, use_container_width=True)
 
     with col4:
@@ -350,7 +331,7 @@ with tab1:
                 textposition='outside'
             ))
             apply_layout(fig, height=260, showlegend=False,
-                         yaxis=dict(title='Minutes',gridcolor='#2a2a2f'))
+                         yaxis=dict(title='Minutes', gridcolor='#2a2a2f'))
             st.plotly_chart(fig, use_container_width=True)
 
 
@@ -359,7 +340,7 @@ with tab1:
 # ═══════════════════════════════════════════════════════════════
 with tab2:
     st.markdown("#### Key Variables Across the 10-Week Term")
-    st.caption("🔴 shaded = finals week (Week 10)  |  Charts always show the full term regardless of week filter")
+    st.caption("🔴 shaded = finals week (Week 10)")
 
     weekly = df.groupby('study_week').agg(
         stress  =('stress_avg','mean'),
@@ -375,7 +356,7 @@ with tab2:
                         'Mood Score (−4 to +4)','Talking Time (min)'],
         vertical_spacing=0.2, horizontal_spacing=0.1)
 
-    for (row,col,key,color,yrange) in [
+    for row,col,key,color,yrange in [
         (1,1,'stress', C['stress'],[1,5]),
         (1,2,'sleep',  C['sleep'], [3,12]),
         (2,1,'mood',   C['mood'],  [-2,2.5]),
@@ -396,13 +377,14 @@ with tab2:
                       margin=dict(l=40,r=20,t=60,b=40))
     st.plotly_chart(fig, use_container_width=True)
 
-    col1,col2 = st.columns(2)
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown("##### BT Social Proximity by Week")
         if 'devices' in weekly.columns:
-            fig2 = go.Figure(go.Bar(x=[f'W{w}' for w in WEEKS],
-                                    y=weekly['devices'].values,
-                                    marker_color=C['mood']))
+            fig2 = go.Figure(go.Bar(
+                x=[f'W{w}' for w in WEEKS],
+                y=weekly['devices'].values,
+                marker_color=C['mood']))
             apply_layout(fig2, height=240,
                          yaxis=dict(title='Unique BT devices',gridcolor='#2a2a2f'))
             st.plotly_chart(fig2, use_container_width=True)
@@ -410,9 +392,10 @@ with tab2:
     with col2:
         st.markdown("##### Walking Activity by Week")
         if 'walking' in weekly.columns:
-            fig3 = go.Figure(go.Bar(x=[f'W{w}' for w in WEEKS],
-                                    y=(weekly['walking']*100).values,
-                                    marker_color=C['exercise']))
+            fig3 = go.Figure(go.Bar(
+                x=[f'W{w}' for w in WEEKS],
+                y=(weekly['walking']*100).values,
+                marker_color=C['exercise']))
             apply_layout(fig3, height=240,
                          yaxis=dict(title='% time walking',gridcolor='#2a2a2f'))
             st.plotly_chart(fig3, use_container_width=True)
@@ -440,26 +423,25 @@ with tab3:
 
     if scatter_opts:
         keys = list(scatter_opts.keys())
-        s1 = st.selectbox("First chart", keys, index=0)
+        s1 = st.selectbox("First chart",  keys, index=0)
         s2 = st.selectbox("Second chart", keys, index=min(1,len(keys)-1))
 
         def make_scatter(key):
             xc,yc,xl,yl,color = scatter_opts[key]
             d = filtered[[xc,yc]].dropna()
             if len(d) < 5: return None
-            r = d[xc].corr(d[yc])
+            r   = d[xc].corr(d[yc])
             m,b = np.polyfit(d[xc], d[yc], 1)
-            x_line = np.linspace(d[xc].min(), d[xc].max(), 100)
+            xs  = np.linspace(d[xc].min(), d[xc].max(), 100)
             fig = go.Figure()
             fig.add_scatter(x=d[xc], y=d[yc], mode='markers',
                             marker=dict(color=color,size=5,opacity=0.4))
-            fig.add_scatter(x=x_line, y=m*x_line+b, mode='lines',
+            fig.add_scatter(x=xs, y=m*xs+b, mode='lines',
                             line=dict(color='white',width=2,dash='dash'))
             fig.add_annotation(text=f"r = {r:.3f}",
                                xref="paper",yref="paper",x=0.05,y=0.95,
                                showarrow=False,font=dict(size=13,color='#e8e8ea'),
-                               bgcolor='#2a2a2f',bordercolor='#444',
-                               borderwidth=1,borderpad=6)
+                               bgcolor='#2a2a2f',borderwidth=1,borderpad=6)
             apply_layout(fig, height=320, showlegend=False,
                          xaxis=dict(title=xl,gridcolor='#2a2a2f'),
                          yaxis=dict(title=yl,gridcolor='#2a2a2f'))
@@ -478,7 +460,7 @@ with tab3:
     avail = {k:v for k,v in corr_map.items() if k in filtered.columns}
     if len(avail) >= 3:
         corr_df = filtered[list(avail.keys())].rename(columns=avail).corr()
-        mask = np.triu(np.ones(corr_df.shape, dtype=bool), k=1)
+        mask = np.triu(np.ones(corr_df.shape,dtype=bool),k=1)
         corr_df[mask] = None
         fig_c = px.imshow(corr_df,color_continuous_scale='RdBu_r',
                           zmin=-1,zmax=1,text_auto='.2f',aspect='auto')
@@ -501,9 +483,8 @@ with tab4:
         fig_hm = px.imshow(pivot,
             color_continuous_scale=[
                 [0.0,'#4ECDC4'],[0.25,'#A8E6CE'],
-                [0.5,'#F0A050'],[0.75,'#E05C5C'],[1.0,'#8B0000']
-            ],
-            zmin=1, zmax=5, text_auto='.1f', aspect='auto',
+                [0.5,'#F0A050'],[0.75,'#E05C5C'],[1.0,'#8B0000']],
+            zmin=1,zmax=5,text_auto='.1f',aspect='auto',
             labels=dict(x='Study Week',y='Student ID',color='Avg Stress'))
         fig_hm.update_xaxes(tickvals=WEEKS,ticktext=[f'W{w}' for w in WEEKS])
         fig_hm.update_traces(textfont_size=9)
@@ -512,24 +493,21 @@ with tab4:
             paper_bgcolor='#17171a',font=dict(color='#e8e8ea',size=11),
             margin=dict(l=80,r=20,t=40,b=40),
             coloraxis_colorbar=dict(title="Stress",
-                tickvals=[1,2,3,4,5],
-                ticktext=['1 Calm','2','3 Mod','4','5 High']))
+                tickvals=[1,2,3,4,5],ticktext=['1 Calm','2','3 Mod','4','5 High']))
         st.plotly_chart(fig_hm, use_container_width=True)
 
         sm = df.groupby('uid')['stress_avg'].mean().dropna()
         if len(sm):
             c1,c2,c3 = st.columns(3)
-            c1.metric("Most stressed",   sm.idxmax(), f"{sm.max():.2f}/5")
-            c2.metric("Least stressed",  sm.idxmin(), f"{sm.min():.2f}/5")
-            c3.metric("Range",           f"{sm.max()-sm.min():.2f} units",
-                      "huge individual variation")
+            c1.metric("Most stressed",  sm.idxmax(), f"{sm.max():.2f}/5")
+            c2.metric("Least stressed", sm.idxmin(), f"{sm.min():.2f}/5")
+            c3.metric("Range", f"{sm.max()-sm.min():.2f} units","huge individual variation")
 
-    # Data quality table
     with st.expander("📋 Data quality — responses per student"):
-        q_data = [(uid, n, "⚠️ sparse" if sp else "✓ ok")
+        q_data = [(uid,n,"⚠️ sparse" if sp else "✓ ok")
                   for uid,(n,sp) in quality.items()]
-        q_df = pd.DataFrame(q_data, columns=["Student","Stress responses","Quality"])
-        q_df = q_df.sort_values("Stress responses", ascending=False)
+        q_df = (pd.DataFrame(q_data, columns=["Student","Stress responses","Quality"])
+                .sort_values("Stress responses",ascending=False))
         st.dataframe(q_df, use_container_width=True, hide_index=True)
 
 
@@ -540,63 +518,49 @@ with tab5:
     st.markdown("#### Individual Student Explorer")
     st.caption("🟢 low stress  🟡 medium  🔴 high  |  ⚠️ = fewer than 5 responses")
 
-    if 'uid' not in df.columns:
-        st.warning("No student ID column found.")
-        st.stop()
-
     all_students  = sorted(df['uid'].unique())
     student_means = df.groupby('uid')['stress_avg'].mean().dropna()
 
     def label(uid):
         m  = student_means.get(uid)
-        sp = quality.get(uid, (0, False))[1]
+        sp = quality.get(uid,(0,False))[1]
         if m is None: return uid
-        icon = "🔴" if m >= 3.5 else "🟡" if m >= 2.5 else "🟢"
-        warn = " ⚠️" if sp else ""
-        return f"{icon} {uid}  ({m:.1f}){warn}"
+        icon = "🔴" if m>=3.5 else "🟡" if m>=2.5 else "🟢"
+        return f"{icon} {uid}  ({m:.1f}){' ⚠️' if sp else ''}"
 
-    col_sel, col_charts = st.columns([1, 3])
+    col_sel, col_charts = st.columns([1,3])
 
     with col_sel:
         selected = st.selectbox("Select student", all_students, format_func=label)
-        s = df[df['uid'] == selected]
+        s   = df[df['uid']==selected]
         s_n = int(s['stress_avg'].notna().sum())
-
         st.markdown("---")
         s_stress = s['stress_avg'].mean()
-        s_sleep  = s['sleep_hours'].mean()   if 'sleep_hours'   in s.columns else np.nan
+        s_sleep  = s['sleep_hours'].mean()   if 'sleep_hours'    in s.columns else np.nan
         s_mood   = s['mood_score_avg'].mean() if 'mood_score_avg' in s.columns else np.nan
-
         st.metric("Avg stress",    f"{s_stress:.2f}/5" if not np.isnan(s_stress) else "—")
         st.metric("Avg sleep",     f"{s_sleep:.1f}h"   if not np.isnan(s_sleep)  else "—")
         st.metric("Avg mood",      f"{s_mood:.2f}"     if not np.isnan(s_mood)   else "—")
         st.metric("Stress surveys", s_n)
-
         if s_n < 5:
-            st.warning("⚠️ Only {s_n} responses — treat this student's data with caution.")
-
-        # Cluster badge if available
+            st.warning(f"⚠️ Only {s_n} responses — treat with caution.")
         if cluster_df is not None and 'uid' in cluster_df.columns:
-            row = cluster_df[cluster_df['uid'] == selected]
+            row = cluster_df[cluster_df['uid']==selected]
             if len(row):
-                cl = int(row.iloc[0]['cluster'])
-                st.info(f"🔵 Cluster {cl}")
+                st.info(f"🔵 Cluster {int(row.iloc[0]['cluster'])}")
 
     with col_charts:
         s_weekly = (s.groupby('study_week')
-                    .agg(stress=('stress_avg','mean'),
-                         sleep=('sleep_hours','mean'))
+                    .agg(stress=('stress_avg','mean'),sleep=('sleep_hours','mean'))
                     .reindex(WEEKS))
         group_weekly = df.groupby('study_week')['stress_avg'].mean().reindex(WEEKS)
 
-        # Stress chart vs group
         fig1 = go.Figure()
-        fig1.add_scatter(x=WEEKS, y=s_weekly['stress'],
-                         mode='lines+markers', name=f'{selected}',
-                         line=dict(color=C['stress'],width=2.5),
+        fig1.add_scatter(x=WEEKS, y=s_weekly['stress'], mode='lines+markers',
+                         name=selected, line=dict(color=C['stress'],width=2.5),
                          marker=dict(size=8,color=C['stress']))
-        fig1.add_scatter(x=WEEKS, y=group_weekly,
-                         mode='lines', name='Group average',
+        fig1.add_scatter(x=WEEKS, y=group_weekly, mode='lines',
+                         name='Group average',
                          line=dict(color='#6b6b72',width=1.5,dash='dash'))
         fig1.add_vrect(x0=9.5,x1=10.5,fillcolor='red',opacity=0.07,line_width=0)
         fig1.update_xaxes(tickvals=WEEKS,ticktext=[f'W{w}' for w in WEEKS])
@@ -606,16 +570,15 @@ with tab5:
                      legend=dict(orientation='h',y=-0.3))
         st.plotly_chart(fig1, use_container_width=True)
 
-        # Sleep chart
         if 'sleep' in s_weekly.columns:
             sv = s_weekly['sleep'].values
             sc = [C['sleep'] if not np.isnan(v) and v>=7
                   else C['social'] if not np.isnan(v) and v>=5
                   else C['stress'] if not np.isnan(v)
                   else '#2a2a2f' for v in sv]
-            fig2 = go.Figure(go.Bar(x=[f'W{w}' for w in WEEKS], y=sv,
+            fig2 = go.Figure(go.Bar(x=[f'W{w}' for w in WEEKS],y=sv,
                                     marker_color=sc))
-            fig2.add_hline(y=7, line_dash='dash', line_color=C['sleep'],
+            fig2.add_hline(y=7,line_dash='dash',line_color=C['sleep'],
                            annotation_text='7h recommended',
                            annotation_position='top right')
             apply_layout(fig2, height=220,
@@ -623,23 +586,20 @@ with tab5:
                          yaxis=dict(range=[0,14],title='Hours',gridcolor='#2a2a2f'))
             st.plotly_chart(fig2, use_container_width=True)
 
-        # Show predicted stress if ML data available
         if pred_df is not None and 'uid' in pred_df.columns:
-            sp = pred_df[pred_df['uid'] == selected]
+            sp = pred_df[pred_df['uid']==selected]
             if len(sp) and 'stress_predicted' in sp.columns:
-                sp_weekly = sp.groupby('study_week').agg(
+                sp_w = sp.groupby('study_week').agg(
                     actual=('stress_avg','mean'),
-                    predicted=('stress_predicted','mean')
-                ).reindex(WEEKS)
+                    predicted=('stress_predicted','mean')).reindex(WEEKS)
                 fig3 = go.Figure()
-                fig3.add_scatter(x=WEEKS, y=sp_weekly['actual'],
-                                 mode='lines+markers', name='Actual stress',
+                fig3.add_scatter(x=WEEKS,y=sp_w['actual'],
+                                 mode='lines+markers',name='Actual',
                                  line=dict(color=C['stress'],width=2))
-                fig3.add_scatter(x=WEEKS, y=sp_weekly['predicted'],
-                                 mode='lines+markers', name='Predicted stress',
+                fig3.add_scatter(x=WEEKS,y=sp_w['predicted'],
+                                 mode='lines+markers',name='Predicted',
                                  line=dict(color=C['ml'],width=2,dash='dot'))
-                fig3.update_xaxes(tickvals=WEEKS,
-                                  ticktext=[f'W{w}' for w in WEEKS])
+                fig3.update_xaxes(tickvals=WEEKS,ticktext=[f'W{w}' for w in WEEKS])
                 apply_layout(fig3, height=220,
                              title=f"{selected} — Actual vs Predicted Stress",
                              yaxis=dict(range=[0,5.5],title='Stress',
@@ -653,297 +613,213 @@ with tab5:
 # ═══════════════════════════════════════════════════════════════
 with tab6:
     st.markdown("#### 🤖 Machine Learning Results")
-    st.caption(
-        "Upload the ML CSV files in the sidebar to see predictions, "
-        "feature importance, and cluster analysis."
-    )
 
-    # ── No ML files uploaded ──────────────────────────────────
     if all(f is None for f in [pred_df, cluster_df, fi_df, perf_df]):
         st.info(
-            "👈 Upload the ML files in the sidebar to unlock this tab.  \n"
-            "Files to upload: `ml_predictions.csv`, `ml_clusters.csv`, "
-            "`ml_feature_importance.csv`, `ml_performance.csv`  \n"
-            "All were saved to Google Drive → clean_data by the ML notebook."
+            "ML files not found in the `data/` folder.  \n"
+            "Upload `ml_predictions.csv`, `ml_clusters.csv`, "
+            "`ml_feature_importance.csv`, and `ml_performance.csv` "
+            "to your GitHub `data/` folder."
         )
-        st.markdown("""
-        #### What this tab will show
-        | Section | Contents |
-        |---------|---------|
-        | Model performance | MAE, RMSE, R², AUC — all models compared |
-        | Predicted vs actual stress | How well the model tracked real stress |
-        | High stress probability | Risk indicator for each student-day |
-        | Feature importance | Which signals matter most for predicting stress |
-        | Student clusters | Behaviour groups and what makes them different |
-        """)
         st.stop()
 
-    # ── Model performance ────────────────────────────────────
+    # Model performance
     if perf_df is not None:
-        st.markdown("### 📊 Model Performance Comparison")
-
-        reg  = perf_df[perf_df['task']=='regression']  if 'task' in perf_df.columns else pd.DataFrame()
-        cls  = perf_df[perf_df['task']=='classification'] if 'task' in perf_df.columns else pd.DataFrame()
-
-        col1, col2 = st.columns(2)
+        st.markdown("### 📊 Model Performance")
+        col1,col2 = st.columns(2)
 
         with col1:
-            st.markdown("##### Stress Regression  *(lower MAE = better)*")
-            if not reg.empty and 'metric' in reg.columns:
-                mae_df = (reg[reg['metric']=='MAE']
-                          .pivot_table(index='model', values='value')
-                          .sort_values('value'))
-                if not mae_df.empty:
-                    colors = [C['ml'] if i == 0 else C['neutral']
-                              for i in range(len(mae_df))]
+            st.markdown("##### Regression — lower MAE = better")
+            if 'task' in perf_df.columns:
+                reg = perf_df[(perf_df['task']=='regression') &
+                              (perf_df['metric']=='MAE')]
+                if not reg.empty:
+                    reg = reg.sort_values('value')
+                    colors = [C['ml'] if i==0 else C['neutral']
+                              for i in range(len(reg))]
                     fig = go.Figure(go.Bar(
-                        x=mae_df.index.tolist(),
-                        y=mae_df['value'].values,
+                        x=reg['model'], y=reg['value'],
                         marker_color=colors,
-                        text=[f"{v:.3f}" for v in mae_df['value'].values],
-                        textposition='outside'
-                    ))
+                        text=[f"{v:.3f}" for v in reg['value']],
+                        textposition='outside'))
                     apply_layout(fig, height=280, showlegend=False,
-                                 yaxis=dict(title='MAE (stress units)',
-                                            gridcolor='#2a2a2f'))
+                                 yaxis=dict(title='MAE',gridcolor='#2a2a2f'))
                     st.plotly_chart(fig, use_container_width=True)
-
-                    best = mae_df.index[0]
-                    st.success(f"✅ Best regression model: **{best}**  "
-                               f"(MAE = {mae_df['value'].iloc[0]:.3f} stress units)")
+                    st.success(f"✅ Best: **{reg.iloc[0]['model']}**  "
+                               f"(MAE = {reg.iloc[0]['value']:.3f})")
 
         with col2:
-            st.markdown("##### High Stress Classification  *(higher AUC = better)*")
-            if not cls.empty and 'metric' in cls.columns:
-                auc_df = (cls[cls['metric']=='AUC']
-                          .pivot_table(index='model', values='value')
-                          .sort_values('value', ascending=False))
-                if not auc_df.empty:
-                    colors = [C['ml'] if i == 0 else C['neutral']
-                              for i in range(len(auc_df))]
+            st.markdown("##### Classification — higher AUC = better")
+            if 'task' in perf_df.columns:
+                cls = perf_df[(perf_df['task']=='classification') &
+                              (perf_df['metric']=='AUC')]
+                if not cls.empty:
+                    cls = cls.sort_values('value', ascending=False)
+                    colors = [C['ml'] if i==0 else C['neutral']
+                              for i in range(len(cls))]
                     fig = go.Figure(go.Bar(
-                        x=auc_df.index.tolist(),
-                        y=auc_df['value'].values,
+                        x=cls['model'], y=cls['value'],
                         marker_color=colors,
-                        text=[f"{v:.3f}" for v in auc_df['value'].values],
-                        textposition='outside'
-                    ))
-                    fig.add_hline(y=0.5, line_dash='dash',
-                                  line_color='#6b6b72',
-                                  annotation_text='Random baseline (0.5)',
-                                  annotation_position='top right')
+                        text=[f"{v:.3f}" for v in cls['value']],
+                        textposition='outside'))
+                    fig.add_hline(y=0.5, line_dash='dash', line_color='#888',
+                                  annotation_text='Random (0.5)')
                     apply_layout(fig, height=280, showlegend=False,
-                                 yaxis=dict(title='AUC-ROC',range=[0,1.1],
+                                 yaxis=dict(title='AUC',range=[0,1.1],
                                             gridcolor='#2a2a2f'))
                     st.plotly_chart(fig, use_container_width=True)
-
-                    best_cls = auc_df.index[0]
-                    st.success(f"✅ Best classifier: **{best_cls}**  "
-                               f"(AUC = {auc_df['value'].iloc[0]:.3f})")
-
+                    st.success(f"✅ Best: **{cls.iloc[0]['model']}**  "
+                               f"(AUC = {cls.iloc[0]['value']:.3f})")
         st.divider()
 
-    # ── Predicted vs actual ──────────────────────────────────
+    # Predicted vs actual
     if pred_df is not None:
         st.markdown("### 🎯 Predicted vs Actual Stress")
-
-        col1, col2 = st.columns(2)
+        col1,col2 = st.columns(2)
 
         with col1:
-            st.markdown("##### Scatter — how close were the predictions?")
+            st.markdown("##### How close were the predictions?")
             if all(c in pred_df.columns for c in ['stress_avg','stress_predicted']):
                 d = pred_df[['stress_avg','stress_predicted']].dropna()
-                mae = (d['stress_avg'] - d['stress_predicted']).abs().mean()
-
+                mae = (d['stress_avg']-d['stress_predicted']).abs().mean()
                 fig = go.Figure()
                 fig.add_scatter(x=d['stress_avg'], y=d['stress_predicted'],
                                 mode='markers',
                                 marker=dict(color=C['ml'],size=5,opacity=0.35))
-                # Perfect prediction line
-                fig.add_scatter(x=[1,5], y=[1,5], mode='lines',
+                fig.add_scatter(x=[1,5],y=[1,5],mode='lines',
                                 line=dict(color='white',width=1.5,dash='dash'),
-                                name='Perfect prediction')
-                fig.add_annotation(
-                    text=f"MAE = {mae:.3f}",
-                    xref="paper",yref="paper",x=0.05,y=0.95,
-                    showarrow=False,font=dict(size=13,color='#e8e8ea'),
-                    bgcolor='#2a2a2f',borderwidth=1,borderpad=6
-                )
-                apply_layout(fig, height=320, showlegend=False,
+                                name='Perfect')
+                fig.add_annotation(text=f"MAE = {mae:.3f}",
+                                   xref="paper",yref="paper",x=0.05,y=0.95,
+                                   showarrow=False,font=dict(size=13,color='#e8e8ea'),
+                                   bgcolor='#2a2a2f',borderwidth=1,borderpad=6)
+                apply_layout(fig, height=300, showlegend=False,
                              xaxis=dict(title='Actual stress',range=[0.5,5.5],
                                         gridcolor='#2a2a2f'),
                              yaxis=dict(title='Predicted stress',range=[0.5,5.5],
                                         gridcolor='#2a2a2f'))
                 st.plotly_chart(fig, use_container_width=True)
-                st.caption("Points close to the dashed line = accurate predictions")
+                st.caption("Points on the dashed line = perfect prediction")
 
         with col2:
             st.markdown("##### High stress probability by week")
-            if 'high_stress_prob' in pred_df.columns and 'study_week' in pred_df.columns:
-                prob_weekly = (pred_df.groupby('study_week')['high_stress_prob']
-                               .mean().reindex(WEEKS))
+            if all(c in pred_df.columns for c in ['high_stress_prob','study_week']):
+                pw = (pred_df.groupby('study_week')['high_stress_prob']
+                      .mean().reindex(WEEKS))
                 fig = go.Figure(go.Bar(
-                    x=[f'W{w}' for w in WEEKS],
-                    y=prob_weekly.values,
+                    x=[f'W{w}' for w in WEEKS], y=pw.values,
                     marker_color=[
-                        C['stress'] if (not np.isnan(v) and v >= 0.4)
-                        else C['social'] if (not np.isnan(v) and v >= 0.25)
-                        else C['sleep']
-                        for v in prob_weekly.values
-                    ],
-                    text=[f"{v:.0%}" if not np.isnan(v) else "" for v in prob_weekly.values],
-                    textposition='outside'
-                ))
+                        C['stress'] if (not np.isnan(v) and v>=0.4)
+                        else C['social'] if (not np.isnan(v) and v>=0.25)
+                        else C['sleep'] for v in pw.values],
+                    text=[f"{v:.0%}" if not np.isnan(v) else "" for v in pw.values],
+                    textposition='outside'))
                 fig.add_hline(y=0.25, line_dash='dash', line_color='#F0A050',
-                              annotation_text='25% risk threshold',
-                              annotation_position='top right')
-                apply_layout(fig, height=320,
+                              annotation_text='25% risk')
+                apply_layout(fig, height=300,
                              yaxis=dict(title='Avg high-stress probability',
-                                        tickformat=',.0%', range=[0,0.8],
+                                        tickformat=',.0%',range=[0,0.8],
                                         gridcolor='#2a2a2f'))
                 st.plotly_chart(fig, use_container_width=True)
-                st.caption("Red = predicted high risk of stress that week")
 
-        # Prediction errors histogram
+        # Residuals
         if all(c in pred_df.columns for c in ['stress_avg','stress_predicted']):
-            st.markdown("##### Prediction Errors (Residuals)")
             d = pred_df[['stress_avg','stress_predicted']].dropna()
             residuals = d['stress_avg'] - d['stress_predicted']
-            fig = go.Figure(go.Histogram(
-                x=residuals, nbinsx=30,
-                marker_color=C['ml'], opacity=0.75
-            ))
-            fig.add_vline(x=0, line_dash='dash', line_color='white',
-                          annotation_text='Zero error',
-                          annotation_position='top right')
-            apply_layout(fig, height=240, showlegend=False,
+            fig = go.Figure(go.Histogram(x=residuals, nbinsx=30,
+                                         marker_color=C['ml'], opacity=0.75))
+            fig.add_vline(x=0, line_dash='dash', line_color='white')
+            apply_layout(fig, height=220, showlegend=False,
                          xaxis=dict(title='Error (actual − predicted)',
                                     gridcolor='#2a2a2f'),
-                         yaxis=dict(title='Count', gridcolor='#2a2a2f'))
+                         yaxis=dict(title='Count',gridcolor='#2a2a2f'))
             st.plotly_chart(fig, use_container_width=True)
             st.caption("Ideal = centred on zero with a narrow spread")
 
         st.divider()
 
-    # ── Feature importance ───────────────────────────────────
+    # Feature importance
     if fi_df is not None:
         st.markdown("### 🏆 Feature Importance")
         st.caption("Which daily signals matter most for predicting stress?")
-
-        label_col = 'label' if 'label' in fi_df.columns else \
-                    'feature' if 'feature' in fi_df.columns else None
-        imp_col   = 'importance' if 'importance' in fi_df.columns else None
-
-        if label_col and imp_col:
-            fi_sorted = fi_df.sort_values(imp_col, ascending=True).tail(10)
+        label_col = 'label' if 'label' in fi_df.columns else 'feature'
+        if 'importance' in fi_df.columns and label_col in fi_df.columns:
+            fi_s = fi_df.sort_values('importance', ascending=True).tail(10)
             colors = []
-            for feat in fi_sorted[label_col if label_col else 'feature']:
-                f_lower = str(feat).lower()
-                if 'sleep' in f_lower:      colors.append(C['sleep'])
-                elif 'walk' in f_lower or 'activity' in f_lower: colors.append(C['exercise'])
-                elif 'talk' in f_lower or 'conv' in f_lower: colors.append(C['social'])
-                elif 'bt' in f_lower or 'device' in f_lower: colors.append(C['mood'])
-                elif 'week' in f_lower or 'day' in f_lower:  colors.append(C['neutral'])
-                else: colors.append(C['ml'])
-
+            for feat in fi_s[label_col]:
+                fl = str(feat).lower()
+                if 'sleep'    in fl: colors.append(C['sleep'])
+                elif 'walk'   in fl: colors.append(C['exercise'])
+                elif 'talk'   in fl: colors.append(C['social'])
+                elif 'bt'     in fl or 'device' in fl: colors.append(C['mood'])
+                else:                colors.append(C['ml'])
             fig = go.Figure(go.Bar(
-                x=fi_sorted[imp_col],
-                y=fi_sorted[label_col],
-                orientation='h',
-                marker_color=colors,
-                text=[f"{v:.4f}" for v in fi_sorted[imp_col]],
-                textposition='outside'
-            ))
+                x=fi_s['importance'], y=fi_s[label_col],
+                orientation='h', marker_color=colors,
+                text=[f"{v:.4f}" for v in fi_s['importance']],
+                textposition='outside'))
             apply_layout(fig, height=380, showlegend=False,
-                         xaxis=dict(title='Importance score',gridcolor='#2a2a2f'),
-                         yaxis=dict(gridcolor='#2a2a2f'))
+                         xaxis=dict(title='Importance score',gridcolor='#2a2a2f'))
             st.plotly_chart(fig, use_container_width=True)
 
-            # Top 3 callout
-            top3 = fi_df.sort_values(imp_col, ascending=False).head(3)
-            st.markdown("**Top 3 most important features:**")
+            top3 = fi_df.sort_values('importance',ascending=False).head(3)
+            st.markdown("**Top 3 most important features for predicting stress:**")
             for _, row in top3.iterrows():
-                lbl = row[label_col] if label_col else row['feature']
-                imp = row[imp_col]
-                st.markdown(f"- **{lbl}** — importance score {imp:.4f}")
-
+                st.markdown(f"- **{row[label_col]}** — score {row['importance']:.4f}")
         st.divider()
 
-    # ── Student clusters ──────────────────────────────────────
+    # Clusters
     if cluster_df is not None:
         st.markdown("### 👥 Student Behaviour Clusters")
-        st.caption(
-            "Students grouped by similar daily behaviour patterns — "
-            "no stress labels used, purely based on what they do each day."
-        )
+        st.caption("Students grouped by similar daily behaviour — no stress labels used")
 
         if 'cluster' in cluster_df.columns and 'uid' in cluster_df.columns:
-
-            # Cluster counts
-            cluster_counts = cluster_df['cluster'].value_counts().sort_index()
-            col1, col2 = st.columns([1, 2])
+            counts = cluster_df['cluster'].value_counts().sort_index()
+            col1,col2 = st.columns([1,2])
 
             with col1:
                 st.markdown("##### Students per cluster")
                 fig = go.Figure(go.Pie(
-                    labels=[f"Cluster {c}" for c in cluster_counts.index],
-                    values=cluster_counts.values,
+                    labels=[f"Cluster {c}" for c in counts.index],
+                    values=counts.values,
                     marker_colors=[C['stress'],C['sleep'],C['mood'],
-                                   C['exercise'],C['social']][:len(cluster_counts)],
-                    hole=0.4, textinfo='label+value'
-                ))
+                                   C['exercise'],C['social']][:len(counts)],
+                    hole=0.4, textinfo='label+value'))
                 apply_layout(fig, height=280, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
-                # Merge clusters with main data to compare profiles
                 if 'uid' in df.columns:
-                    df_with_clusters = df.merge(cluster_df[['uid','cluster']],
-                                                on='uid', how='left')
-                    cluster_profile_cols = [
-                        c for c in ['stress_avg','sleep_hours','fraction_walking',
-                                    'total_talking_minutes','unique_devices_nearby']
-                        if c in df_with_clusters.columns
-                    ]
-                    if cluster_profile_cols:
-                        profile = (df_with_clusters.groupby('cluster')
-                                   [cluster_profile_cols].mean())
-                        profile_norm = (profile - profile.min()) / \
-                                       (profile.max() - profile.min() + 1e-9)
-
-                        nice_labels = {
-                            'stress_avg':            'Stress',
-                            'sleep_hours':           'Sleep hours',
-                            'fraction_walking':      'Walking',
-                            'total_talking_minutes': 'Talking time',
-                            'unique_devices_nearby': 'BT devices',
-                        }
-                        profile_norm = profile_norm.rename(columns=nice_labels)
-
-                        st.markdown("##### Cluster behaviour profiles *(normalised)*")
+                    df_c = df.merge(cluster_df[['uid','cluster']], on='uid', how='left')
+                    pcols = [c for c in ['stress_avg','sleep_hours',
+                                         'fraction_walking','total_talking_minutes',
+                                         'unique_devices_nearby']
+                             if c in df_c.columns]
+                    if pcols:
+                        profile = df_c.groupby('cluster')[pcols].mean()
+                        pn = (profile - profile.min()) / \
+                             (profile.max() - profile.min() + 1e-9)
+                        pn = pn.rename(columns={
+                            'stress_avg':'Stress','sleep_hours':'Sleep',
+                            'fraction_walking':'Walking',
+                            'total_talking_minutes':'Talking',
+                            'unique_devices_nearby':'BT devices'})
+                        st.markdown("##### Cluster profiles *(normalised 0–1)*")
                         fig = go.Figure()
-                        colors_c = [C['stress'],C['sleep'],C['mood'],
-                                    C['exercise'],C['social']]
-                        for i, (idx, row) in enumerate(profile_norm.iterrows()):
-                            fig.add_bar(
-                                name=f"Cluster {idx}",
-                                x=row.index.tolist(),
-                                y=row.values,
-                                marker_color=colors_c[i % len(colors_c)],
-                            )
-                        apply_layout(fig, height=280,
-                                     barmode='group',
-                                     yaxis=dict(title='Normalised score (0–1)',
-                                                range=[0,1.2],gridcolor='#2a2a2f'),
+                        clr = [C['stress'],C['sleep'],C['mood'],C['exercise']]
+                        for i,(idx,row) in enumerate(pn.iterrows()):
+                            fig.add_bar(name=f"Cluster {idx}",
+                                        x=row.index.tolist(), y=row.values,
+                                        marker_color=clr[i%len(clr)])
+                        apply_layout(fig, height=280, barmode='group',
+                                     yaxis=dict(title='Score (0–1)',range=[0,1.2],
+                                                gridcolor='#2a2a2f'),
                                      legend=dict(orientation='h',y=-0.25))
                         st.plotly_chart(fig, use_container_width=True)
 
-            # Student list per cluster
-            st.markdown("##### Which students are in each cluster?")
-            n_clusters = cluster_df['cluster'].nunique()
-            cols = st.columns(min(n_clusters, 4))
-            for i, (col, (cl, grp)) in enumerate(
-                zip(cols, cluster_df.groupby('cluster'))
-            ):
-                col.markdown(f"**Cluster {cl}**  ({len(grp)} students)")
-                col.markdown(", ".join(sorted(grp['uid'].tolist())))
+            st.markdown("##### Students per cluster")
+            n_cl = cluster_df['cluster'].nunique()
+            cols = st.columns(min(n_cl,4))
+            for col,(cl,grp) in zip(cols, cluster_df.groupby('cluster')):
+                col.markdown(f"**Cluster {cl}** ({len(grp)})")
+                col.write(", ".join(sorted(grp['uid'].tolist())))
