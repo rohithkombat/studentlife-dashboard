@@ -1,0 +1,12 @@
+feature,label,importance
+total_talking_minutes,Talking time (min),0.15439563352835173
+fraction_walking,Fraction walking,0.13578268576486208
+fraction_running,Fraction running,0.135605636777051
+fraction_stationary,Fraction stationary,0.13542220237335004
+unique_devices_nearby,BT devices nearby,0.11954474985275833
+num_conversations,Num conversations,0.11862966229259715
+sleep_hours,Sleep hours,0.06571865284414848
+day_of_week,Day of week,0.051312117125329064
+sleep_rate,Sleep quality,0.038870392745032026
+study_week,Study week,0.03654272771588399
+is_weekend,Is weekend,0.00817553898063619
