@@ -20,10 +20,7 @@ st.set_page_config(
 )
 
 # ── Session state: theme ──────────────────────────────────────────────────────
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
-
-dark = st.session_state.dark_mode
+dark = True
 
 # ── Theme colour tokens ───────────────────────────────────────────────────────
 if dark:
@@ -346,22 +343,6 @@ with st.sidebar:
     st.caption("Rohith Elanchezhian · Newcastle University")
     st.divider()
 
-    # ── Theme toggle ──────────────────────────────────────────────
-    st.markdown(f"<b style='color:{TEXT}'>Theme</b>", unsafe_allow_html=True)
-    col_l, col_d = st.columns(2)
-    with col_l:
-        if st.button("☀️ Light", use_container_width=True,
-                     type="primary" if not dark else "secondary"):
-            st.session_state.dark_mode = False
-            st.rerun()
-    with col_d:
-        if st.button("🌙 Dark", use_container_width=True,
-                     type="primary" if dark else "secondary"):
-            st.session_state.dark_mode = True
-            st.rerun()
-
-    st.divider()
-
     # ── Filters ───────────────────────────────────────────────────
     st.markdown(f"<b style='color:{TEXT}'>Filters</b>", unsafe_allow_html=True)
     week_filter = st.selectbox("Study week",
@@ -418,10 +399,7 @@ st.markdown(f"""
                 Digital Health · 49 students · 10 weeks · Newcastle University
             </p>
         </div>
-        <div style='color:rgba(255,255,255,0.6);font-size:0.75rem;text-align:right'>
-            {"🌙 Dark mode" if dark else "☀️ Light mode"}<br>
-            <span style='font-size:0.68rem'>Toggle in sidebar →</span>
-        </div>
+
     </div>
 </div>
 """, unsafe_allow_html=True)
