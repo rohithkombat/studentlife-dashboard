@@ -394,8 +394,6 @@ else:
         f"**{filtered['uid'].nunique()} students** · "
         f"{week_filter} | {day_filter}"
     )
-    if sparse:
-        st.warning(f"⚠️ {len(sparse)} students have <5 stress responses — treat their averages with caution.")
 
     # ─────────────────────────────────────────────────────────────────────────
     # TABS
@@ -441,13 +439,38 @@ else:
                    f" of nights fell below the recommended 7 hours.","teal")
         with f3:
             if 'stress_avg' in df.columns and 'is_weekend' in df.columns:
-                wd = df[df['is_weekend']==False]['stress_avg'].mean()
-                we = df[df['is_weekend']==True]['stress_avg'].mean()
+                wd_vals = df[df['is_weekend']==False]['stress_avg'].dropna()
+                we_vals = df[df['is_weekend']==True]['stress_avg'].dropna()
+                wd = wd_vals.mean()
+                we = we_vals.mean()
                 if not (np.isnan(wd) or np.isnan(we)):
                     d = "higher" if we > wd else "lower"
-                    fc("😮","Surprising Finding",
+                    # Run the actual t-test rather than implying significance.
+                    # On the current data this difference is NOT significant,
+                    # so the card must not overstate it.
+                    try:
+                        from scipy import stats as _st
+                        _, pval = _st.ttest_ind(wd_vals, we_vals)
+                        if pval < 0.05:
+                            sig = f"significant (p = {pval:.3f})"
+                        else:
+                            sig = f"not statistically significant (p = {pval:.3f})"
+                    except Exception:
+                        sig = "significance not computed"
+                    fc("😮","Surprising Trend",
                        f"Weekend stress (<b>{we:.2f}</b>) is <b>{d}</b> than"
-                       f" weekday (<b>{wd:.2f}</b>).","amber")
+                       f" weekday (<b>{wd:.2f}</b>) &mdash; {sig}.","amber")
+
+        st.caption(
+
+            "Note: the aggregated dataset covers study weeks 5-10 for 39 of the "
+
+            "49 students. Earlier weeks were lost during aggregation and are not "
+
+            "represented in these figures."
+
+        )
+
 
         st.divider()
 
@@ -959,6 +982,15 @@ The burnout score combines three signals — each scored 0–100%:
             # Model performance
             if perf_df is not None and 'task' in perf_df.columns:
                 st.markdown("### 📊 Model Performance")
+                st.caption(
+                    "Models use eleven passive sensing features plus a per-student "
+                    "baseline (that student's own mean stress), computed inside each "
+                    "cross-validation fold from training rows only. Without the baseline "
+                    "feature the sensing streams alone improve on a mean-prediction "
+                    "baseline by roughly 1.5%; with it, by roughly 8.7%. Because folds are "
+                    "randomly shuffled rather than ordered in time, these figures are an "
+                    "upper bound on what a deployed model could achieve."
+                )
                 col1, col2 = st.columns(2)
 
                 with col1:
