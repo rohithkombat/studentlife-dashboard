@@ -575,7 +575,10 @@ The burnout score combines three signals — each scored 0–100%:
             (1,1,'stress', C['stress'],[1,5]),
             (1,2,'sleep',  C['sleep'], [3,12]),
             (2,1,'mood',   C['mood'],  [-2,2.5]),
-            (2,2,'talking',C['social'],[0,70]),
+            # Talking time is scaled from the data rather than fixed. Daily totals
+            # sum every detected conversation, so they run to several hundred
+            # minutes; a hardcoded ceiling pushed the whole series off the chart.
+            (2,2,'talking',C['social'],None),
         ]:
             y = weekly[key] if key in weekly.columns else [None]*10
             fig.add_scatter(x=WEEKS, y=y, mode='lines+markers',
@@ -583,7 +586,16 @@ The burnout score combines three signals — each scored 0–100%:
                             marker=dict(size=7,color=color), row=row, col=col)
             fig.add_vrect(x0=9.5,x1=10.5,fillcolor='red',opacity=0.07,
                           line_width=0, row=row, col=col)
-            fig.update_yaxes(range=yr,gridcolor='#1e1e2e',row=row,col=col)
+            if yr is not None:
+                fig.update_yaxes(range=yr,gridcolor='#1e1e2e',row=row,col=col)
+            else:
+                # auto-scale with a little headroom
+                _v = pd.to_numeric(weekly[key], errors='coerce').dropna() if key in weekly.columns else pd.Series(dtype=float)
+                if len(_v):
+                    fig.update_yaxes(range=[0, float(_v.max())*1.15],
+                                     gridcolor='#1e1e2e',row=row,col=col)
+                else:
+                    fig.update_yaxes(gridcolor='#1e1e2e',row=row,col=col)
             fig.update_xaxes(tickvals=WEEKS,ticktext=[f'W{w}' for w in WEEKS],
                              gridcolor='#1e1e2e',row=row,col=col)
 
